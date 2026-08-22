@@ -60,18 +60,34 @@ clique em **⚔ DUELO** para convidar para uma partida.
 - **Contas de jogador, hangar e progresso (XP, naves, baús)**
   continuam salvos no `localStorage` do navegador — são "locais",
   como já eram antes.
-- **Amigos, status online e duelos** ficam num banco Postgres
-  (Neon), numa tabela `kv_store` simples, acessada pela function
-  `/api/kv`, que só aceita chaves com os prefixos `friends:`,
-  `presence:`, `duelinvite:` e `duelroom:` (protegendo o banco de
-  virar um KV público genérico).
+- **Amigos, status online, duelos, salas públicas e ranking**
+  ficam num banco Postgres (Neon), numa tabela `kv_store` simples,
+  acessada pela function `/api/kv`, que só aceita chaves com os
+  prefixos `friends:`, `presence:`, `duelinvite:`, `duelroom:`,
+  `duellobby:` e `duelrank:` (protegendo o banco de virar um KV
+  público genérico).
+- **Salas públicas**: qualquer piloto pode criar uma sala e receber
+  um código de 5 caracteres pra compartilhar (aba **🎮 Salas**), ou
+  entrar direto digitando o código de outra pessoa — não precisa
+  mais ser amigo pra duelar. As salas abertas também aparecem numa
+  lista pública que atualiza a cada poucos segundos.
+- **Espectador**: enquanto uma sala pública está em duelo, ela some
+  da lista de "salas abertas" e aparece em "partidas ao vivo" — daí
+  qualquer piloto pode clicar em "👁 ASSISTIR" (ou digitar o código)
+  pra ver o duelo em tempo real, sem participar. Também dá pra
+  assistir duelos entre amigos sabendo o código da partida.
+- **Ranking global**: toda vitória/derrota em duelo (via amigo ou
+  sala pública) atualiza um placar compartilhado (aba **🏆
+  Ranking**), ordenado por saldo de vitórias.
 - O duelo sincroniza a posição/vida dos jogadores a cada ~180ms
   (polling), então é "quase tempo real" — bom o suficiente para um
   duelo casual, mas não é netcode de jogo competitivo profissional.
 - Registros de convite/partida são tratados como expirados depois
   de 24h (checado na leitura — não há um job de limpeza automática
   rodando sozinho; linhas antigas só são removidas quando alguém
-  tenta ler aquela chave de novo).
+  tenta ler aquela chave de novo). Salas públicas somem da lista
+  depois de 10 minutos sem alguém entrar, e partidas ao vivo somem
+  da lista de espectadores depois de 30 minutos.
 
 ## Limitações a saber
 
