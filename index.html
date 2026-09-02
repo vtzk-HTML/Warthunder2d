@@ -141,8 +141,18 @@
   .friend-btn.decline:hover,.friend-btn.remove:hover{background:#e24b4a22;}
   .friend-btn.duel{border-color:#FAC775;color:#FAC775;}
   .friend-btn.duel:hover{background:#FAC77522;}
+  .friend-btn.gift{border-color:#c98af5;color:#c98af5;}
+  .friend-btn.gift:hover{background:#c98af522;}
   .friend-btn:disabled{opacity:0.35;cursor:default;}
   .friend-empty{color:#5a7eab;font-size:11px;text-align:center;padding:14px 0;}
+
+  /* ── PRESENTES ── */
+  .gift-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#1a0f2a;border:1px solid #6a3a9a;border-radius:8px;padding:8px 10px;margin-bottom:6px;}
+  .gift-row .friend-name{color:#e6d4ff;}
+  .gift-row .friend-status{color:#c98af5;}
+  .gift-claim-btn{background:linear-gradient(135deg,#4a1a8a,#2a0f50);border:1px solid #c98af5;color:#e6d4ff;font-family:monospace;font-size:10.5px;font-weight:700;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap;}
+  .gift-claim-btn:hover{background:linear-gradient(135deg,#5c2aa0,#3a1868);}
+  .gift-badge{background:#c98af522;border:1px solid #c98af5;color:#c98af5;font-size:9px;font-weight:700;border-radius:4px;padding:2px 6px;letter-spacing:0.5px;}
 
   /* ── DUEL INVITE BANNER ── */
   #duelInviteBanner{position:absolute;top:36px;left:50%;transform:translateX(-50%);background:#0f0f2af5;border:1px solid #FAC775;border-radius:10px;padding:12px 16px;display:none;flex-direction:column;align-items:center;gap:8px;z-index:9990;box-shadow:0 0 20px #FAC77555;max-width:88%;text-align:center;}
@@ -333,6 +343,11 @@
             <button onclick="sendFriendRequest()">+ ADICIONAR</button>
           </div>
           <div class="friend-add-msg" id="friendAddMsg"></div>
+
+          <div id="giftSection" style="display:none;">
+            <div class="friend-section-title">🎁 Presentes recebidos</div>
+            <div id="giftList"></div>
+          </div>
 
           <div id="friendReqSection" style="display:none;">
             <div class="friend-section-title">📨 Pedidos recebidos</div>
@@ -1170,21 +1185,23 @@ let showWaveBanner=false, waveBannerT=0;
 
 function updateHUD(){
   const p=player;
-  document.getElementById('h-ship').textContent=p.ship.name;
-  document.getElementById('h-score').textContent=score;
-  document.getElementById('h-wave').textContent=wave;
+  const inDuel=state==='duel';
+  document.getElementById('h-ship').textContent=p.ship.name+(inDuel?' (Duelo)':'');
+  document.getElementById('h-score').textContent=inDuel?'—':score;
+  document.getElementById('h-wave').textContent=inDuel?'Duelo':wave;
   const anyLocked=(typeof missiles!=='undefined'&&missiles)?missiles.some(m=>m.homing&&m.target&&m.target.hp>0):false;
-  document.getElementById('h-missile').textContent=`${p.ship.missileName} ×${p.mCount}`+(anyLocked?' 🔒':'');
+  const locking=!!(p.locking);
+  document.getElementById('h-missile').textContent=`${p.ship.missileName} ×${p.mCount}`+((anyLocked||locking)?' 🔒':'');
   const hAct=document.getElementById('h-active');
   hAct.textContent=p.activeCD>0?`${p.ship.active.name} ${Math.ceil(p.activeCD/60)}s`:`${p.ship.active.name} ✓`;
   hAct.style.color=p.activeCD>0?'#4a7ab5':'#7eb8f7';
-  document.getElementById('h-enemies').textContent=enemies?enemies.length:0;
+  document.getElementById('h-enemies').textContent=inDuel?(duel.oppHp>0?1:0):(enemies?enemies.length:0);
   const pct=Math.max(0,p.hp/p.maxHp*100);
   document.getElementById('hpbar').style.width=pct+'%';
   document.getElementById('hpbar').style.background=pct>60?'#1D9E75':pct>30?'#EF9F27':'#E24B4A';
   const hv=document.getElementById('h-lives');
-  hv.textContent='♥'.repeat(p.lives)+'♡'.repeat(Math.max(0,3-p.lives));
-  hv.style.color='#e24b4a';
+  if(inDuel){ hv.textContent='⚔'; hv.style.color='#FAC775'; }
+  else { hv.textContent='♥'.repeat(p.lives)+'♡'.repeat(Math.max(0,3-p.lives)); hv.style.color='#e24b4a'; }
   document.getElementById('ib-stats').textContent=
     `HP: ${Math.ceil(p.hp)}/${p.maxHp} | Vel: ${p.ship.speed} | Canhão: ${p.ship.gunDmg}dmg ×${p.ship.gunCount} | ${p.ship.missileName}: ${p.mCount} cargas (M)`
     +(p.ship.special?` | ${p.ship.special.name} (E): ${p.specialCD>0?Math.ceil(p.specialCD/60)+'s':'pronto'}`:'')
@@ -1316,9 +1333,20 @@ function triggerLockMsg(tgt,color){
 }
 
 function nearestEnemy(){
+  if(state==='duel'){
+    // No duelo não existe array de "enemies" — o alvo pra travamento/mísseis
+    // teleguiados e habilidades ativas é sempre o oponente humano.
+    if(!duel.active||duel.oppHp<=0) return null;
+    return {x:duel.oppX,y:H-duel.oppY,hp:duel.oppHp,size:1,name:duel.opponent||'oponente',__duelOpponent:true};
+  }
   let best=null,bd=9999;
   enemies.forEach(e=>{const d=Math.hypot(e.x-player.x,e.y-player.y);if(d<bd){bd=d;best=e;}});
   return best;
+}
+function targetStillValid(t){
+  if(!t) return false;
+  if(t.__duelOpponent) return state==='duel'&&duel.active&&duel.oppHp>0;
+  return t.hp>0&&enemies.includes(t);
 }
 
 function applyDamage(amount){
@@ -1358,9 +1386,32 @@ function fireMissile(skipLock){
   launchMissile(nearestEnemy());
 }
 
+// Dispara um míssil no duelo: em vez de simular a trajetória nos DOIS
+// clientes (o que dessincronizaria rápido via polling), quem atira só
+// registra a intenção (dano, tipo, se é teleguiado etc). Quem RECEBE é
+// quem desenha o míssil vindo em sua direção e resolve o acerto contra o
+// próprio HP/imunidades — o mesmo padrão já usado pros tiros de canhão.
+function duelFireMissile(desc){
+  duel.myMissileFire=Object.assign({ts:Date.now()},desc);
+  spawnParticles(player.x,player.y-20,desc.color||player.ship.color,10,true);
+  updateHUD();
+}
 function launchMissile(tgt){
   const s=player.ship;
   player.mCount--; player.mCooldown=s.missileCooldown*(s.id==='f35'?0.75:s.id==='f18'?0.85:1);
+  if(state==='duel'){
+    let kind='single', count=1;
+    if(s.missileRocket){ kind='rocket'; count=5; }
+    else if(s.missileBomb){ kind='bomb'; count=s.missileBombCount||3; }
+    else if(s.missileArea){ kind='area'; count=1; }
+    duelFireMissile({
+      dmg:s.missileDmg, color:s.missileColor, homing:!!s.missileHoming,
+      area:!!(s.missileArea||s.missileBomb), areaR:s.missileAreaR||55,
+      speed:s.missileSpeed, kind, count
+    });
+    if(s.missileHoming) triggerLockMsg(tgt,s.missileColor);
+    return;
+  }
   if(s.missileRocket){
     for(let i=-2;i<=2;i++){
       missiles.push({x:player.x+i*7,y:player.y-10,vx:i*0.8,vy:-s.missileSpeed,dmg:s.missileDmg,color:s.missileColor,homing:false,area:false,rocket:true,life:80,target:null});
@@ -1420,22 +1471,40 @@ function explodeMissile(m){
 }
 
 function useActive(){
-  if(state!=='playing'||player.activeCD>0) return;
+  if((state!=='playing'&&state!=='duel')||player.activeCD>0) return;
   const id=player.ship.id;
+  const inDuel=state==='duel';
   switch(id){
     case 'f22': player.invulActive=true; player.activeT=120; player.activeCD=900; break;
     case 'f35': player.mCooldown=0; fireMissile(true); player.activeCD=1080; break;
     case 'f14': player.spdMul=2; player.fireMul=0.5; player.activeT=240; player.activeCD=1200; break;
     case 'f39': player.invulActive=true; player.activeT=40; player.activeCD=600; break;
     case 'f5': player.spdMul=2.4; player.invulActive=true; player.activeT=50; player.activeCD=480; break;
-    case 'su27': eBullets=eBullets.filter(b=>Math.hypot(b.x-player.x,b.y-player.y)>90); player.invulActive=true; player.activeT=60; player.activeCD=960; break;
+    case 'su27':
+      // Defletor de radar: no PvE limpa os tiros inimigos próximos; no duelo
+      // limpa balas/mísseis do oponente que já estão a caminho.
+      if(inDuel){
+        duel.oBullets=duel.oBullets.filter(b=>Math.hypot(b.x-player.x,b.y-player.y)>90);
+        duel.oMissiles=duel.oMissiles.filter(m=>Math.hypot(m.x-player.x,m.y-player.y)>90);
+      } else {
+        eBullets=eBullets.filter(b=>Math.hypot(b.x-player.x,b.y-player.y)>90);
+      }
+      player.invulActive=true; player.activeT=60; player.activeCD=960; break;
     case 'mig29': player.mCooldown=0; fireMissile(true); player.activeCD=840; break;
-    case 'b2': missiles.push({x:player.x,y:player.y-30,vx:0,vy:-4,dmg:250,color:player.ship.color,homing:false,area:true,areaR:9999,life:200,exploded:false,bomb:true,target:null}); player.activeCD=1500; break;
+    case 'b2':
+      if(inDuel) duelFireMissile({dmg:250,color:player.ship.color,homing:false,area:true,areaR:9999,speed:4,kind:'huge',count:1});
+      else missiles.push({x:player.x,y:player.y-30,vx:0,vy:-4,dmg:250,color:player.ship.color,homing:false,area:true,areaR:9999,life:200,exploded:false,bomb:true,target:null});
+      player.activeCD=1500; break;
     case 'p51': player.spdMul=1.8; player.fireMul=0.6; player.activeT=180; player.activeCD=720; break;
     case 'supertucano': player.mCooldown=0; fireMissile(true); player.activeCD=960; break;
     case 'sr71': player.spdMul=3; player.invulActive=true; player.activeT=70; player.activeCD=1200; break;
     case 'su57':
-      {const t57=nearestEnemy(); missiles.push({x:player.x,y:player.y-20,vx:0,vy:-9,dmg:280,color:player.ship.color,homing:true,area:false,life:200,target:t57}); triggerLockMsg(t57,player.ship.color);}
+      if(inDuel){
+        duelFireMissile({dmg:280,color:player.ship.color,homing:true,area:false,areaR:55,speed:9,kind:'single',count:1});
+        triggerLockMsg(nearestEnemy(),player.ship.color);
+      } else {
+        const t57=nearestEnemy(); missiles.push({x:player.x,y:player.y-20,vx:0,vy:-9,dmg:280,color:player.ship.color,homing:true,area:false,life:200,target:t57}); triggerLockMsg(t57,player.ship.color);
+      }
       player.activeCD=1320; break;
     case 'j20': player.invulActive=true; player.activeT=240; player.activeCD=840; player.mCooldown=0; break;
     case 'f16': player.spdMul=1.9; player.fireMul=0.65; player.activeT=150; player.activeCD=600; break;
@@ -1450,8 +1519,23 @@ function useActive(){
 }
 
 function useSpecial(){
-  if(state!=='playing'||!player.ship.special||player.specialCD>0) return;
+  if((state!=='playing'&&state!=='duel')||!player.ship.special||player.specialCD>0) return;
   const id=player.ship.id;
+  if(state==='duel'){
+    // Drones persistentes (F-35/J-20) e o congelamento de tempo (Su-57) são
+    // pensados pra ondas de inimigos e não fazem sentido 1x1 num duelo por
+    // polling — aqui viram uma rajada extra de mísseis, mantendo a
+    // habilidade especial útil e visível pro oponente sem exigir sincronizar
+    // uma IA de drone em tempo real pela rede.
+    switch(id){
+      case 'f35': duelFireMissile({dmg:Math.round(player.ship.missileDmg*0.6),color:player.ship.color,homing:true,area:false,areaR:55,speed:player.ship.missileSpeed,kind:'burst',count:2}); player.specialCD=2700; break;
+      case 'su57': duelFireMissile({dmg:Math.round(player.ship.missileDmg*0.5),color:'#33f3ff',homing:false,area:true,areaR:90,speed:6,kind:'area',count:1}); player.specialCD=2700; break;
+      case 'j20': duelFireMissile({dmg:Math.round(player.ship.missileDmg*0.5),color:player.ship.color,homing:true,area:false,areaR:55,speed:player.ship.missileSpeed,kind:'burst',count:3}); player.specialCD=2280; break;
+    }
+    spawnParticles(player.x,player.y,player.ship.color,24,true);
+    updateHUD();
+    return;
+  }
   switch(id){
     case 'f35': drones.push({offsetX:-44,offsetY:14,t:480,shootT:10}); drones.push({offsetX:44,offsetY:14,t:480,shootT:10}); player.specialCD=2700; break;
     case 'su57': freezeT=180; player.specialCD=2700; break;
@@ -1462,14 +1546,24 @@ function useSpecial(){
 }
 
 function useFlare(){
-  if(state!=='playing'||player.ship.id==='p51') return;
-  eMissiles.forEach(m=>{
-    if(Math.hypot(m.x-player.x,m.y-player.y)<260){
-      m.diverted=true; m.life=Math.min(m.life,40);
-      const ang=Math.random()*Math.PI*2;
-      m.vx=Math.cos(ang)*3; m.vy=Math.sin(ang)*3+2;
-    }
-  });
+  if((state!=='playing'&&state!=='duel')||player.ship.id==='p51') return;
+  if(state==='duel'){
+    duel.oMissiles.forEach(m=>{
+      if(m.homing&&!m.exploded&&Math.hypot(m.x-player.x,m.y-player.y)<260){
+        m.homing=false; m.life=Math.min(m.life,40);
+        const ang=Math.random()*Math.PI*2;
+        m.vx=Math.cos(ang)*3; m.vy=Math.sin(ang)*3+2;
+      }
+    });
+  } else {
+    eMissiles.forEach(m=>{
+      if(Math.hypot(m.x-player.x,m.y-player.y)<260){
+        m.diverted=true; m.life=Math.min(m.life,40);
+        const ang=Math.random()*Math.PI*2;
+        m.vx=Math.cos(ang)*3; m.vy=Math.sin(ang)*3+2;
+      }
+    });
+  }
   for(let i=0;i<6;i++){
     const a=(i/6)*Math.PI*2;
     particles.push({x:player.x+Math.cos(a)*8,y:player.y+Math.sin(a)*8,vx:Math.cos(a)*2.5,vy:Math.sin(a)*2.5,life:40,color:'#ffaa33',size:3});
@@ -1477,13 +1571,43 @@ function useFlare(){
 }
 
 function useStealth(){
-  if(state!=='playing'||!player.ship.stealth||player.stealthCD>0||player.stealthActive) return;
+  if((state!=='playing'&&state!=='duel')||!player.ship.stealth||player.stealthCD>0||player.stealthActive) return;
   const st=player.ship.stealth;
   player.stealthActive=true;
   player.stealthT=Math.round(st.durSec*60);
   player.stealthCD=Math.round(st.cdSec*60);
   spawnParticles(player.x,player.y,player.ship.color,18,true);
   updateHUD();
+}
+
+// Compartilhado entre o loop solo e o loop de duelo: cooldowns de
+// habilidades, mísseis e canhão, além do travamento de mísseis teleguiados.
+// Centralizar isso aqui evita que o duelo (que antes não chamava nada disso)
+// fique com habilidades "mudas" — cooldowns que nunca andam e travamento que
+// nunca conclui.
+function tickAbilityCooldowns(){
+  player.activeCD=Math.max(0,(player.activeCD||0)-1);
+  player.specialCD=Math.max(0,(player.specialCD||0)-1);
+  player.flareCD=Math.max(0,(player.flareCD||0)-1);
+  player.stealthCD=Math.max(0,(player.stealthCD||0)-1);
+  if(player.stealthT>0){ player.stealthT--; if(player.stealthT===0) player.stealthActive=false; }
+  if(player.activeT>0){ player.activeT--; if(player.activeT===0){ player.invulActive=false; player.spdMul=1; player.fireMul=1; } }
+  player.gunCD=Math.max(0,(player.gunCD||0)-1);
+  player.mCooldown=Math.max(0,(player.mCooldown||0)-1);
+  if(player.locking){
+    const lk=player.locking;
+    if(!targetStillValid(lk.target)){
+      player.locking=null;
+      player.lockMsg={text:'⚠ ALVO PERDIDO',color:'#ff5050',t:40};
+    } else {
+      lk.t--;
+      if(lk.t<=0){
+        const tgt=lk.target;
+        player.locking=null;
+        launchMissile(tgt);
+      }
+    }
+  }
 }
 
 /* ── MAIN LOOP ── */
@@ -1505,35 +1629,13 @@ function loop(){
   if(keys['ArrowUp']||keys['w']||keys['W']) player.y=Math.max(H/2+20,player.y-player.ship.speed*player.spdMul);
   if(keys['ArrowDown']||keys['s']||keys['S']) player.y=Math.min(H-24,player.y+player.ship.speed*player.spdMul);
 
-  player.activeCD=Math.max(0,player.activeCD-1);
-  player.specialCD=Math.max(0,player.specialCD-1);
-  player.flareCD=Math.max(0,player.flareCD-1);
-  player.stealthCD=Math.max(0,player.stealthCD-1);
-  if(player.stealthT>0){ player.stealthT--; if(player.stealthT===0) player.stealthActive=false; }
   if(freezeT>0){ freezeT--; ctx.save(); ctx.globalAlpha=0.10; ctx.fillStyle='#6e6eff'; ctx.fillRect(0,0,W,H); ctx.restore(); }
   if(frameN%15===0) updateHUD();
-  if(player.activeT>0){ player.activeT--; if(player.activeT===0){ player.invulActive=false; player.spdMul=1; player.fireMul=1; } }
   if(player.ship.id==='f22'&&frameN%20===0&&player.hp<player.maxHp){ player.hp=Math.min(player.maxHp,player.hp+1); updateHUD(); }
   if(player.ship.id==='j20'&&frameN%10===0&&player.hp<player.maxHp){ player.hp=Math.min(player.maxHp,player.hp+2); updateHUD(); }
   if(player.ship.id==='f39'&&frameN%240===0&&player.mCount<player.ship.missileCount){ player.mCount++; updateHUD(); }
 
-  player.gunCD=Math.max(0,player.gunCD-1);
-  player.mCooldown=Math.max(0,player.mCooldown-1);
-
-  if(player.locking){
-    const lk=player.locking;
-    if(!lk.target||lk.target.hp<=0||!enemies.includes(lk.target)){
-      player.locking=null;
-      player.lockMsg={text:'⚠ ALVO PERDIDO',color:'#ff5050',t:40};
-    } else {
-      lk.t--;
-      if(lk.t<=0){
-        const tgt=lk.target;
-        player.locking=null;
-        launchMissile(tgt);
-      }
-    }
-  }
+  tickAbilityCooldowns();
 
   if((keys[' ']||keys['ArrowUp'])&&player.gunCD===0){
     const spread=player.ship.gunSpread, cnt=player.ship.gunCount;
@@ -1877,8 +1979,21 @@ async function storeSet(key,val){
 async function storeDelete(key){
   try{ await fetch('/api/kv?key='+encodeURIComponent(key),{method:'DELETE'}); }catch(e){}
 }
+// Sync "leve" pro duelo: atualiza meu campo (p1/p2) dentro do objeto da sala
+// e já recebe de volta o objeto inteiro (incluindo o campo do oponente) numa
+// resposta só — metade das requisições de rede do storeGet+storeSet antigo,
+// e sem a janela de corrida entre ler e escrever.
+async function storeMerge(key,path,val){
+  try{
+    const r=await fetch('/api/kv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,mergePath:path,mergeValue:val}),keepalive:true});
+    if(!r.ok) return null;
+    const d=await r.json();
+    return d.value===undefined?null:d.value;
+  }catch(e){ return null; }
+}
 function friendKey(u){ return 'friends:'+safeKey(u); }
 function presenceKey(u){ return 'presence:'+safeKey(u); }
+function giftKey(u){ return 'gift:'+safeKey(u); }
 function inviteKey(u){ return 'duelinvite:'+safeKey(u); }
 function roomKey(id){ return 'duelroom:'+id; }
 function lobbyKey(){ return 'duellobby:open'; }
@@ -1982,6 +2097,7 @@ async function removeFriend(u){
 }
 async function refreshFriends(){
   if(!currentUser) return;
+  refreshGiftInbox();
   const my=await getFriendData(currentUser);
   const reqSec=document.getElementById('friendReqSection');
   const reqList=document.getElementById('friendReqList');
@@ -2017,12 +2133,88 @@ async function refreshFriends(){
       </div>
       <div class="friend-actions">
         <button class="friend-btn duel" ${isOn&&!inDuelNow?'':'disabled'}>⚔ DUELO</button>
+        <button class="friend-btn gift">🎁</button>
         <button class="friend-btn remove">✕</button>
       </div>`;
     row.querySelector('.duel').onclick=()=>inviteFriendToDuel(u);
+    row.querySelector('.gift').onclick=()=>sendGift(u);
     row.querySelector('.remove').onclick=()=>{ if(confirm('Remover '+u+' da sua lista de amigos?')) removeFriend(u); };
     list.appendChild(row);
   }
+}
+
+/* ══════════════════════════════════════════════
+   ONLINE: PRESENTES ENTRE AMIGOS
+   Presenteia com baús de guerra (a mesma moeda usada pra desbloquear
+   aeronaves). O baú sai do seu inventário local e vira uma entrada
+   na caixa de presentes remota (gift:<usuário>) do amigo, que pode
+   resgatar quando quiser — os baús resgatados vão pro inventário
+   local dele, prontos pra abrir na aba Hangar / tela de vitória.
+══════════════════════════════════════════════ */
+async function getGiftInbox(u){
+  const d=await storeGet(giftKey(u));
+  return Array.isArray(d)?d:[];
+}
+async function sendGift(target){
+  if(!currentUser||target.toLowerCase()===currentUser.toLowerCase()) return;
+  const d=getCurrentData();
+  if(!d||d.pendingChests<1){
+    alert('Você não tem baús sobrando pra presentear. Suba de nível pra ganhar mais baús!');
+    return;
+  }
+  if(!confirm('Enviar 1 📦 baú de presente para '+target+'?')) return;
+  // Debita localmente primeiro (é a "moeda" do jogo, guardada no seu save).
+  patchCurrentData({pendingChests:d.pendingChests-1});
+  refreshLobbyUI();
+  try{
+    const inbox=await getGiftInbox(target);
+    inbox.push({id:'g'+Date.now()+Math.floor(Math.random()*1000),from:currentUser,type:'chest',amount:1,ts:Date.now()});
+    await storeSet(giftKey(target),inbox.slice(-30)); // mantém só os 30 mais recentes
+  }catch(e){
+    // Falhou o envio pela rede: devolve o baú pro jogador pra não perder o item.
+    const cur=getCurrentData();
+    if(cur) patchCurrentData({pendingChests:cur.pendingChests+1});
+    refreshLobbyUI();
+    alert('Não foi possível enviar o presente agora. Tente novamente.');
+    return;
+  }
+  const msg=document.getElementById('friendAddMsg');
+  if(msg){ msg.style.color='#c98af5'; msg.textContent='🎁 Baú enviado para '+target+'!'; }
+  refreshFriends();
+}
+async function claimGift(id){
+  if(!currentUser) return;
+  const inbox=await getGiftInbox(currentUser);
+  const gift=inbox.find(g=>g.id===id);
+  if(!gift) return;
+  const remaining=inbox.filter(g=>g.id!==id);
+  await storeSet(giftKey(currentUser),remaining);
+  const cur=getCurrentData();
+  if(cur){
+    patchCurrentData({pendingChests:cur.pendingChests+(gift.amount||1)});
+    refreshLobbyUI();
+  }
+  refreshGiftInbox();
+}
+async function refreshGiftInbox(){
+  if(!currentUser) return;
+  const sec=document.getElementById('giftSection');
+  const list=document.getElementById('giftList');
+  if(!sec||!list) return;
+  const inbox=await getGiftInbox(currentUser);
+  if(!inbox.length){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  list.innerHTML='';
+  [...inbox].sort((a,b)=>b.ts-a.ts).forEach(g=>{
+    const row=document.createElement('div');
+    row.className='gift-row';
+    row.innerHTML=`<div class="friend-id"><span class="gift-badge">📦 ×${g.amount||1}</span>
+      <div><div class="friend-name">De ${escapeHtml(g.from)}</div>
+      <div class="friend-status">Baú de guerra</div></div></div>
+      <button class="gift-claim-btn">RESGATAR</button>`;
+    row.querySelector('.gift-claim-btn').onclick=()=>claimGift(g.id);
+    list.appendChild(row);
+  });
 }
 
 /* ══════════════════════════════════════════════
@@ -2030,8 +2222,8 @@ async function refreshFriends(){
 ══════════════════════════════════════════════ */
 let duel={
   active:false, waiting:false, matchId:null, isHost:false, opponent:null, isPublic:false,
-  oppShipId:null, oppX:0, oppY:0, oppHp:0, oppMaxHp:1, oppLastSeenShotTs:0,
-  myShotTs:0, syncTimer:null, watchTimer:null, animId:null, oBullets:[]
+  oppShipId:null, oppX:0, oppY:0, oppHp:0, oppMaxHp:1, oppLastSeenShotTs:0, oppLastSeenMissileTs:0,
+  myShotTs:0, myMissileFire:null, syncTimer:null, watchTimer:null, animId:null, oBullets:[], oMissiles:[]
 };
 
 async function inviteFriendToDuel(target){
@@ -2110,14 +2302,22 @@ function enterDuel(room){
   document.getElementById('overlay').style.display='none';
   duel.oppShipId=duel.isHost?room.p2.ship:room.p1.ship;
   duel.opponent=duel.isHost?room.p2.username:room.p1.username;
-  duel.oBullets=[]; duel.myShotTs=0; duel.oppLastSeenShotTs=0;
+  duel.oBullets=[]; duel.oMissiles=[]; duel.myShotTs=0; duel.myMissileFire=null;
+  duel.oppLastSeenShotTs=0; duel.oppLastSeenMissileTs=0;
   duel.oppX=W/2; duel.oppY=H-60; duel.oppHp=1; duel.oppMaxHp=1;
   state='duel'; frameN=0; particles=[]; keys={};
-  player={ x:W/2, y:H-60, ship:sel, hp:sel.hp, maxHp:sel.hp, gunCD:0, inv:0 };
+  player={
+    x:W/2, y:H-60, ship:sel, hp:sel.hp, maxHp:sel.hp,
+    mCount:sel.missileCount, mCooldown:0, gunCD:0,
+    activeCD:0, activeT:0, specialCD:0,
+    spdMul:1, fireMul:1, invulActive:false, godMode:false, admFastFire:false, flareCD:0,
+    stealthActive:false, stealthT:0, stealthCD:0, lockMsg:null, locking:null, inv:0
+  };
   document.getElementById('h-ship').textContent=sel.name+' (Duelo)';
+  updateHUD();
   mkStars();
   if(duel.isPublic) registerLiveMatch();
-  duel.syncTimer=setInterval(duelSync,180);
+  duel.syncTimer=setInterval(duelSync,150);
   duelLoop();
 }
 async function registerLiveMatch(){
@@ -2396,27 +2596,56 @@ function spectateLoop(){
   ctx.fillText('👁 MODO ESPECTADOR — ESC para sair',W/2,H-6);
   ctx.restore();
 }
+// Converte um evento de disparo de míssil (sincronizado via mFire) em
+// projéteis visíveis/colidíveis do lado de quem recebe. O dano total de
+// disparos com vários projéteis (foguetes, bombas em leque) é dividido entre
+// eles — do contrário um foguete de 5 unidades que "todos acertam" o mesmo
+// alvo (o oponente, sempre no centro) causaria 5x o dano pretendido, o que
+// faz sentido contra um esquadrão de inimigos no PvE mas não 1x1 no duelo.
+function spawnIncomingMissiles(desc,oppX){
+  if(!desc) return;
+  const n=Math.max(1,desc.count||1);
+  const vy=Math.max(3,Math.min(9,(desc.speed||6)*0.85));
+  const perDmg=(n>1&&desc.kind!=='burst')?desc.dmg/n:desc.dmg;
+  for(let i=0;i<n;i++){
+    const off=n>1?(i-(n-1)/2)*(desc.kind==='rocket'?14:22):0;
+    duel.oMissiles.push({
+      x:oppX+off, y:26, vx:off*0.04, vy,
+      dmg:perDmg, color:desc.color||'#ff6a3a',
+      homing:!!desc.homing, area:!!desc.area, areaR:desc.areaR||55,
+      life:280, exploded:false
+    });
+  }
+}
 async function duelSync(){
   if(!duel.active) return;
-  const room=await storeGet(roomKey(duel.matchId));
-  if(!room||room.status==='ended'){
-    if(room&&room.status==='ended') finishDuel(room.winner===currentUser);
-    return;
-  }
   const mySlot=duel.isHost?'p1':'p2', oppSlot=duel.isHost?'p2':'p1';
-  room[mySlot]={username:currentUser,ship:sel.id,x:player.x,y:player.y,hp:Math.max(0,player.hp),maxHp:player.maxHp,shotTs:duel.myShotTs,ts:Date.now()};
-  await storeSet(roomKey(duel.matchId),room);
+  const mine={
+    username:currentUser, ship:sel.id, x:player.x, y:player.y,
+    hp:Math.max(0,player.hp), maxHp:player.maxHp,
+    shotTs:duel.myShotTs, mFire:duel.myMissileFire||null, ts:Date.now()
+  };
+  const room=await storeMerge(roomKey(duel.matchId),mySlot,mine);
+  if(!room) return;
+  if(room.status==='ended'){ finishDuel(room.winner===currentUser); return; }
   const opp=room[oppSlot];
   if(opp){
     duel.oppX=opp.x; duel.oppY=opp.y; duel.oppHp=opp.hp; duel.oppMaxHp=opp.maxHp;
+    const os=SHIPS.find(s=>s.id===opp.ship)||sel;
     if(opp.shotTs>duel.oppLastSeenShotTs){
       duel.oppLastSeenShotTs=opp.shotTs;
-      const os=SHIPS.find(s=>s.id===opp.ship)||sel;
-      duel.oBullets.push({x:opp.x,y:22,vy:6.5,dmg:os.gunDmg,color:os.color});
+      const cnt=os.gunCount||1, spread=os.gunSpread||0;
+      for(let i=0;i<cnt;i++){
+        const off=cnt>1?(i-(cnt-1)/2)*(spread/(cnt-1)):0;
+        duel.oBullets.push({x:opp.x+off,y:22,vy:6.5,dmg:os.gunDmg,color:os.color});
+      }
+    }
+    if(opp.mFire&&opp.mFire.ts>duel.oppLastSeenMissileTs){
+      duel.oppLastSeenMissileTs=opp.mFire.ts;
+      spawnIncomingMissiles(opp.mFire,opp.x);
     }
     if(Date.now()-opp.ts>9000){
-      room.status='ended'; room.winner=currentUser;
-      await storeSet(roomKey(duel.matchId),room);
+      const ended=await storeSet(roomKey(duel.matchId),Object.assign({},room,{status:'ended',winner:currentUser}));
       finishDuel(true);
     }
   }
@@ -2452,14 +2681,19 @@ function duelLoop(){
   ctx.save(); ctx.strokeStyle='#1a3a6a55'; ctx.setLineDash([6,6]); ctx.beginPath();
   ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke(); ctx.restore();
 
-  if(keys['ArrowLeft']||keys['a']||keys['A']) player.x=Math.max(22,player.x-sel.speed);
-  if(keys['ArrowRight']||keys['d']||keys['D']) player.x=Math.min(W-22,player.x+sel.speed);
-  if(keys['ArrowUp']||keys['w']||keys['W']) player.y=Math.max(H/2+20,player.y-sel.speed);
-  if(keys['ArrowDown']||keys['s']||keys['S']) player.y=Math.min(H-24,player.y+sel.speed);
+  const spd=sel.speed*(player.spdMul||1);
+  if(keys['ArrowLeft']||keys['a']||keys['A']) player.x=Math.max(22,player.x-spd);
+  if(keys['ArrowRight']||keys['d']||keys['D']) player.x=Math.min(W-22,player.x+spd);
+  if(keys['ArrowUp']||keys['w']||keys['W']) player.y=Math.max(H/2+20,player.y-spd);
+  if(keys['ArrowDown']||keys['s']||keys['S']) player.y=Math.min(H-24,player.y+spd);
 
-  player.gunCD=Math.max(0,(player.gunCD||0)-1);
+  if(frameN%15===0) updateHUD();
+  tickAbilityCooldowns();
+
+  const duelDmgGuard=()=>player.invulActive||player.godMode||player.stealthActive;
+
   if(keys[' ']&&player.gunCD===0){
-    player.gunCD=Math.max(10,sel.gunRate);
+    player.gunCD=Math.max(10,sel.gunRate*(player.fireMul||1));
     duel.myShotTs=Date.now();
     spawnParticles(player.x,player.y-18,sel.color,3,false);
   }
@@ -2467,11 +2701,42 @@ function duelLoop(){
   duel.oBullets=duel.oBullets.filter(b=>{
     b.y+=b.vy;
     if(b.y>H+10) return false;
-    ctx.save(); ctx.shadowColor=b.color; ctx.shadowBlur=6; ctx.fillStyle=b.color;
+    ctx.save(); ctx.shadowColor=b.color; ctx.shadowBlur=4; ctx.fillStyle=b.color;
     ctx.beginPath(); ctx.arc(b.x,b.y,3.5,0,Math.PI*2); ctx.fill(); ctx.restore();
     if(player.hp>0&&Math.abs(b.x-player.x)<16&&Math.abs(b.y-player.y)<16){
+      if(dueLocalDmgGuard()){ spawnParticles(player.x,player.y,'#7eb8f7',5,false); return false; }
       player.hp-=b.dmg;
       spawnParticles(player.x,player.y,sel.color,8,false);
+      if(player.hp<=0) forfeitDuel();
+      return false;
+    }
+    return true;
+  });
+
+  duel.oMissiles=duel.oMissiles.filter(m=>{
+    m.life--;
+    if(m.homing&&!m.exploded){
+      const dx=player.x-m.x;
+      m.vx+=Math.sign(dx)*0.35;
+      m.vx=Math.max(-6.5,Math.min(6.5,m.vx));
+      drawLockReticle({x:player.x,y:player.y,size:1},m.color);
+    }
+    m.x+=m.vx; m.y+=m.vy;
+    if(m.life<=0||m.y>H+30) return false;
+    ctx.save(); ctx.shadowColor=m.color; ctx.shadowBlur=5; ctx.fillStyle=m.color;
+    ctx.beginPath(); ctx.moveTo(m.x,m.y-9); ctx.lineTo(m.x-3.5,m.y+7); ctx.lineTo(m.x+3.5,m.y+7); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    const dist=Math.hypot(m.x-player.x,m.y-player.y);
+    const hitR=m.area?m.areaR:16;
+    if(dist<hitR){
+      if(m.area){
+        ctx.save(); ctx.beginPath(); ctx.arc(m.x,m.y,m.areaR,0,Math.PI*2);
+        ctx.fillStyle=m.color+'33'; ctx.fill(); ctx.strokeStyle=m.color; ctx.lineWidth=1.5; ctx.stroke(); ctx.restore();
+      }
+      if(dueLocalDmgGuard()){ spawnParticles(player.x,player.y,'#7eb8f7',8,false); return false; }
+      player.hp-=m.dmg;
+      spawnParticles(player.x,player.y,m.color,m.area?18:10,true);
+      updateHUD();
       if(player.hp<=0) forfeitDuel();
       return false;
     }
@@ -2489,6 +2754,41 @@ function duelLoop(){
   drawJet(player.x,player.y,sel,1,1,1);
   const oppShip=SHIPS.find(s=>s.id===duel.oppShipId)||sel;
   drawJet(duel.oppX,H-duel.oppY,oppShip,1,1,-1);
+
+  if(player.mCooldown>0){
+    const mx=sel.missileCooldown, pct=1-player.mCooldown/mx;
+    ctx.fillStyle='#1a2a4a'; ctx.fillRect(player.x-15,player.y+16,30,4);
+    ctx.fillStyle=sel.missileColor; ctx.fillRect(player.x-15,player.y+16,30*pct,4);
+  }
+  if(player.stealthActive){
+    ctx.save(); ctx.globalAlpha=0.45+0.25*Math.sin(frameN/3);
+    ctx.beginPath(); ctx.arc(player.x,player.y,30,0,Math.PI*2);
+    ctx.strokeStyle='#00f0ff'; ctx.lineWidth=2; ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+  if(player.locking&&player.locking.target){
+    const lk=player.locking, tgt=lk.target, pct=1-lk.t/lk.total;
+    ctx.save();
+    const r=16*(tgt.size||1)+5*Math.sin(frameN/3);
+    ctx.strokeStyle=sel.missileColor; ctx.lineWidth=2.2;
+    ctx.shadowColor=sel.missileColor; ctx.shadowBlur=6;
+    ctx.beginPath();
+    ctx.arc(tgt.x,tgt.y,r,-Math.PI/2,-Math.PI/2+pct*Math.PI*2);
+    ctx.stroke();
+    ctx.font='bold 9px monospace'; ctx.textAlign='center';
+    ctx.fillStyle=sel.missileColor;
+    ctx.fillText('TRAVANDO '+Math.round(pct*100)+'%',tgt.x,tgt.y-18*(tgt.size||1)-10);
+    ctx.restore();
+  }
+  if(player.lockMsg&&player.lockMsg.t>0){
+    player.lockMsg.t--;
+    ctx.save();
+    ctx.globalAlpha=Math.min(1,player.lockMsg.t/20);
+    ctx.font='bold 13px monospace'; ctx.textAlign='center';
+    ctx.fillStyle=player.lockMsg.color; ctx.shadowColor=player.lockMsg.color; ctx.shadowBlur=6;
+    ctx.fillText(player.lockMsg.text,W/2,38);
+    ctx.restore();
+  }
+  ctx.globalAlpha=1;
 
   ctx.save();
   ctx.fillStyle='#222'; ctx.fillRect(20,H-14,140,6);
@@ -2541,11 +2841,11 @@ function toggleFullscreen(){
 document.addEventListener('keydown',e=>{
   if(keys) keys[e.key]=true;
   if(e.key===' ') e.preventDefault();
-  if((e.key==='m'||e.key==='M')&&state==='playing') fireMissile();
-  if((e.key==='q'||e.key==='Q')&&state==='playing') useActive();
-  if((e.key==='e'||e.key==='E')&&state==='playing') useSpecial();
-  if((e.key==='f'||e.key==='F')&&state==='playing') useFlare();
-  if((e.key==='h'||e.key==='H')&&state==='playing') useStealth();
+  if((e.key==='m'||e.key==='M')&&(state==='playing'||state==='duel')) fireMissile();
+  if((e.key==='q'||e.key==='Q')&&(state==='playing'||state==='duel')) useActive();
+  if((e.key==='e'||e.key==='E')&&(state==='playing'||state==='duel')) useSpecial();
+  if((e.key==='f'||e.key==='F')&&(state==='playing'||state==='duel')) useFlare();
+  if((e.key==='h'||e.key==='H')&&(state==='playing'||state==='duel')) useStealth();
   if(e.key==='Escape'&&state==='duel') forfeitDuel();
   if(e.key==='Escape'&&state==='spectate') stopSpectate();
 });
