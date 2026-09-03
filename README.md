@@ -60,12 +60,21 @@ clique em **⚔ DUELO** para convidar para uma partida.
 - **Contas de jogador, hangar e progresso (XP, naves, baús)**
   continuam salvos no `localStorage` do navegador — são "locais",
   como já eram antes.
-- **Amigos, status online, duelos, salas públicas e ranking**
-  ficam num banco Postgres (Neon), numa tabela `kv_store` simples,
-  acessada pela function `/api/kv`, que só aceita chaves com os
-  prefixos `friends:`, `presence:`, `duelinvite:`, `duelroom:`,
-  `duellobby:` e `duelrank:` (protegendo o banco de virar um KV
-  público genérico).
+- **Amigos, status online, duelos, presentes, salas públicas e
+  ranking** ficam num banco Postgres (Neon), numa tabela `kv_store`
+  simples, acessada pela function `/api/kv`, que só aceita chaves
+  com os prefixos `friends:`, `presence:`, `gift:`, `duelinvite:`,
+  `duelroom:`, `duellobby:` e `duelrank:` (protegendo o banco de
+  virar um KV público genérico).
+- **Presentes entre amigos**: no botão 🎁 de um amigo (aba **👥
+  Amigos**) abre um modal com duas abas — **📦 Baú** (envia 1 baú de
+  guerra dos seus baús pendentes, igual antes) e **🛩 Aeronave**
+  (escolhe uma nave já desbloqueada do seu Hangar — exceto as
+  iniciais P-51 e A-29, que todo piloto já tem — e ela sai do seu
+  inventário e vai pro do amigo). O amigo resgata o presente na
+  seção "🎁 Presentes recebidos" da própria aba Amigos: baús viram
+  baús pendentes pra abrir, e aeronaves entram direto no hangar
+  dele.
 - **Salas públicas**: qualquer piloto pode criar uma sala e receber
   um código de 5 caracteres pra compartilhar (aba **🎮 Salas**), ou
   entrar direto digitando o código de outra pessoa — não precisa
@@ -82,12 +91,12 @@ clique em **⚔ DUELO** para convidar para uma partida.
 - O duelo sincroniza a posição/vida dos jogadores a cada ~180ms
   (polling), então é "quase tempo real" — bom o suficiente para um
   duelo casual, mas não é netcode de jogo competitivo profissional.
-- Registros de convite/partida são tratados como expirados depois
-  de 24h (checado na leitura — não há um job de limpeza automática
-  rodando sozinho; linhas antigas só são removidas quando alguém
-  tenta ler aquela chave de novo). Salas públicas somem da lista
-  depois de 10 minutos sem alguém entrar, e partidas ao vivo somem
-  da lista de espectadores depois de 30 minutos.
+- Registros de convite/partida/presente são tratados como expirados
+  depois de 24h (checado na leitura — não há um job de limpeza
+  automática rodando sozinho; linhas antigas só são removidas quando
+  alguém tenta ler aquela chave de novo). Salas públicas somem da
+  lista depois de 10 minutos sem alguém entrar, e partidas ao vivo
+  somem da lista de espectadores depois de 30 minutos.
 
 ## Limitações a saber
 

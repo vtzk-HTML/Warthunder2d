@@ -1,0 +1,9 @@
+{
+  "name": "caca-a-jatos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Caça a Jatos — jogo com contas, hangar, amigos e duelo PvP online",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0"
+  }
+}
